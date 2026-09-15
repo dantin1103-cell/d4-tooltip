@@ -39,6 +39,35 @@ und Wörterbuch liegen nur im lokalen Speicher deines Geräts — ist das beides
 
 Code ändern: in `index.html` die Zeile `var CODE="4711";` anpassen.
 
+## Builds umschalten
+
+Oben stehen vier Builds von Mekunas Lodernder Schrei:
+
+| Build | wofür |
+|---|---|
+| Leveling 1–70 | bis Stufe 70, Willenskraft und Leben zählen |
+| T1–T12 Fortschritt | erste Uniques, Elegie und Infernaler Homunkulus |
+| Endgame | Leorics Krone, Krümelchens Bluse, volle Krit-Ausrichtung |
+| Speedfarm | In-geom, Sabatons des Höllenhundes, Tempo statt Schaden |
+
+Die Auswahl bleibt gespeichert. Sie entscheidet, gegen welche Zielwerte ein Item bewertet wird.
+
+## Nichts wegwerfen, was du später brauchst
+
+Das Urteil schaut nicht nur auf den aktiven Build:
+
+- **Benannte Teile** werden am Namen erkannt. Fällt dir Verwegenheit oder Leorics Krone in die Hände,
+  während du noch levelst, steht da **„Nicht zerstören"** samt der Builds, die es später brauchen — auch
+  wenn die Werte für den aktuellen Build nichts taugen.
+- **Passende Werte für einen anderen Build** führen zu „einlagern statt umrollen". Ein Ring mit
+  Kritischem Trefferschaden ist beim Leveln nutzlos und im Endgame Pflicht; die Seite sagt dir das,
+  statt ihn zum Verwerten freizugeben.
+- In diesem Fall wird auch **kein Umroll-Vorschlag** mehr gemacht. Was ein späterer Build so haben will,
+  soll nicht verändert werden.
+
+Im Kamera-Modus bekommt die Namenszeile eines solchen Teils im Standbild einen eigenen Rahmen mit dem
+Hinweis „aufheben".
+
 ## Benutzen
 
 1. **Diablo in den randlosen Fenstermodus stellen.** Im exklusiven Vollbild liefert die
@@ -122,10 +151,13 @@ gefunden werden.
   deiner". Für Leveling ist das die richtige Auflösung.
 - **Schadensberechnung.** Dafür bräuchte es die Formeln des Spiels.
 
-## Zielwerte anpassen
+## Aufbau der Dateien
 
-Die Build-Ziele stehen oben in `index.html` im Block `TARGETS` — ein Eintrag pro Slot mit vier
-Wunsch-Affixen, dem Einschmelz-Ziel und der Sockelzahl. Beim Wechsel auf den Endgame-Build tauschst du
-diesen Block aus, sonst nichts.
+- `index.html` — Oberfläche, Bilderfassung, Texterkennung, Bewertungslogik
+- `daten.js` — die Builds, die Liste der aufzuhebenden Teile und das Affix-Wörterbuch
 
-Aktueller Stand: Mekunas „Lodernder Schrei" Leveling 1–70, Season 15, Datensatz vom 14.09.2026.
+Wenn sich ein Build ändert oder einer dazukommt, reicht `daten.js`. Ein Eintrag in `BUILDS` hat pro Slot
+vier Wunsch-Affixe, optional das benannte Zielteil, das Einschmelz-Ziel und die Sockelzahl. `KEEPERS`
+listet die benannten Teile mit den Builds, die sie brauchen.
+
+Quelle: Mekunas „Lodernder Schrei" auf InfinityBuilds, Season 15, Datenstand 15.09.2026.
