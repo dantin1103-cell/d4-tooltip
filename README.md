@@ -25,6 +25,20 @@ Home-Bildschirm* ab — dann startet sie ohne Adressleiste wie eine App.
 
 ---
 
+## Zum Code davor
+
+Beim Öffnen fragt die Seite nach `4711`. Einmal pro Browser — danach merkt sie es sich lokal.
+
+Das ist eine Klingel, kein Schloss. Die Seite läuft im Browser des Besuchers, also steht der Code im
+Quelltext und im öffentlichen Repo. Er hält jemanden ab, der zufällig auf der Adresse landet, und sonst
+niemanden. Wer es wissen will, sieht ihn in zehn Sekunden.
+
+Echter Schutz ginge über eine nicht erratbare Adresse (Datei umbenennen statt `index.html`) oder über
+einen Anbieter mit vorgeschalteter Anmeldung. Solange auf der Seite nichts über dich steht — Fortschritt
+und Wörterbuch liegen nur im lokalen Speicher deines Geräts — ist das beides nicht nötig.
+
+Code ändern: in `index.html` die Zeile `var CODE="4711";` anpassen.
+
 ## Benutzen
 
 1. **Diablo in den randlosen Fenstermodus stellen.** Im exklusiven Vollbild liefert die
