@@ -120,9 +120,53 @@
   footer.foot{margin-top:36px;border-top:1px solid var(--line);padding-top:17px;color:var(--ink-faint);font-size:12.5px}
   @media (max-width:980px){.stage{grid-template-columns:minmax(0,1fr)} details.debug .body{grid-template-columns:minmax(0,1fr)}}
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  #gate{position:fixed;inset:0;z-index:99;background:var(--bg);display:flex;align-items:center;
+    justify-content:center;padding:24px}
+  #gate .box{width:min(320px,100%);text-align:center}
+  #gate h2{font-size:20px;margin:6px 0 4px}
+  #gate .say{color:var(--ink-faint);font-size:13px;margin:0 0 18px}
+  #gate input{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);
+    font-family:var(--mono);font-size:21px;letter-spacing:.35em;text-indent:.35em;text-align:center;
+    padding:12px;border-radius:2px}
+  #gate button{margin-top:12px;width:100%}
+  #gate .err{color:var(--gap-bright);font-size:13px;margin:10px 0 0;min-height:1.3em}
 </style>
 </head>
 <body>
+
+<div id="gate">
+  <div class="box">
+    <p class="eyebrow">Tooltip-Leser</p>
+    <h2>Code eingeben</h2>
+    <p class="say">Vier Ziffern, dann geht es los.</p>
+    <input id="gate-in" type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="Zugangscode">
+    <button class="act" id="gate-go" type="button">Öffnen</button>
+    <p class="err" id="gate-err"></p>
+  </div>
+</div>
+<script>
+(function(){
+  var CODE="4711";
+  var g=document.getElementById("gate"), inp=document.getElementById("gate-in"),
+      err=document.getElementById("gate-err"), go=document.getElementById("gate-go");
+  function unlock(){ if(g && g.parentNode) g.parentNode.removeChild(g); }
+  function check(){
+    if(inp.value.trim()===CODE){
+      try{ localStorage.setItem("d4scan-ok","1"); }catch(e){}
+      unlock();
+    }else{
+      err.textContent="Falscher Code."; inp.value=""; inp.focus();
+    }
+  }
+  go.addEventListener("click", check);
+  inp.addEventListener("keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); check(); } });
+  var already=false;
+  try{ already = localStorage.getItem("d4scan-ok")==="1"; }catch(e){}
+  if(already) unlock(); else setTimeout(function(){ inp.focus(); }, 60);
+})();
+</script>
+
 <div class="app">
 
 <header class="top">
