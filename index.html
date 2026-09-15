@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Tooltip-Leser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Spectral:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#14100d; --panel:#1b1613; --panel-2:#221b17;
+    --line:#382d26; --line-soft:#2a221d;
+    --ink:#e9dfd0; --ink-dim:#a29483; --ink-faint:#71665c;
+    --ember:#c8512b; --ember-soft:#e0714a;
+    --ok:#6f9a5f; --ok-bright:#9ecb87; --warn:#c9973f; --warn-bright:#e0bb6a;
+    --gap:#a8453a; --gap-bright:#e08a7e; --magic:#6f8fdc;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    --display:"Cinzel",Georgia,serif;
+    --body:"Spectral",Georgia,serif;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.6;
+    -webkit-text-size-adjust:100%}
+  .app{max-width:1240px;margin:0 auto;padding-inline:18px;
+    padding-block:calc(20px + env(safe-area-inset-top,0px)) calc(48px + env(safe-area-inset-bottom,0px))}
+  h1,h2{font-family:var(--display);font-weight:600;margin:0;text-wrap:balance}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faint);margin:0}
+  a{color:var(--ember-soft)}
+  :focus-visible{outline:2px solid var(--ember-soft);outline-offset:2px}
+
+  header.top{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;justify-content:space-between;
+    border-bottom:1px solid var(--line);padding-bottom:16px}
+  header.top h1{font-size:25px}
+  header.top .sub{color:var(--ink-dim);font-size:14px;margin:6px 0 0}
+  .status{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-faint)}
+  .status .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ink-faint);margin-right:7px;vertical-align:middle}
+  .status.live .dot{background:var(--ok)} .status.busy .dot{background:var(--warn)}
+
+  .modes{display:flex;gap:6px;margin-top:20px}
+  .modes button{flex:0 0 auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;
+    background:transparent;border:1px solid var(--line);color:var(--ink-faint);border-radius:2px;padding:9px 15px;cursor:pointer}
+  .modes button[aria-pressed=true]{border-color:var(--ember);color:var(--ember-soft);background:#22140d}
+
+  .stage{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,1fr);gap:20px;margin-top:18px;align-items:start}
+  .card{border:1px solid var(--line);border-radius:3px;background:var(--panel);padding:17px}
+  .card h2{font-size:16px;letter-spacing:.02em;margin-bottom:4px}
+  .card .hint{color:var(--ink-faint);font-size:13px;margin:0 0 13px}
+
+  .steps{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:14px}
+  button.act{font-family:var(--mono);font-size:11px;letter-spacing:.11em;text-transform:uppercase;
+    background:var(--ember);color:#160c08;border:0;border-radius:2px;padding:11px 17px;cursor:pointer}
+  button.act:hover{background:var(--ember-soft)}
+  button.act[disabled]{background:var(--line);color:var(--ink-faint);cursor:not-allowed}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink-dim)}
+  button.ghost:hover{border-color:var(--ember);color:var(--ember-soft);background:transparent}
+  button.ghost[aria-pressed=true]{border-color:var(--ok);color:var(--ok-bright)}
+
+  .viewport{position:relative;background:#0d0a09;border:1px solid var(--line-soft);border-radius:2px;overflow:hidden;
+    aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;touch-action:none}
+  .viewport.tall{aspect-ratio:3/4}
+  .viewport video,.viewport canvas.shot{width:100%;height:100%;object-fit:contain;display:block}
+  .viewport canvas.shot{position:absolute;inset:0}
+  .viewport .empty{color:var(--ink-faint);font-size:14px;text-align:center;padding:22px;max-width:36ch}
+  #selbox{position:absolute;border:1px solid var(--ember);background:rgba(200,81,43,.12);pointer-events:none;display:none}
+  #guide{position:absolute;border:1px dashed rgba(224,113,74,.75);border-radius:3px;pointer-events:none;display:none}
+  #guide::after{content:"Tooltip hier ausfüllen";position:absolute;left:0;bottom:-22px;font-family:var(--mono);
+    font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ember-soft)}
+  .viewport.picking{cursor:crosshair}
+
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:13px}
+  .row label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+  input[type=range]{accent-color:var(--ember);width:132px}
+  select{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);font-family:var(--body);
+    font-size:13.5px;padding:6px 8px;border-radius:2px}
+
+  .verdict{border-left:3px solid var(--line);padding:2px 0 2px 15px}
+  .verdict .lead{font-family:var(--display);font-size:22px;line-height:1.25;display:block}
+  .verdict .sub{color:var(--ink-dim);font-size:13.5px;display:block;margin-top:4px}
+  .verdict[data-level=ok]{border-left-color:var(--ok)} .verdict[data-level=ok] .lead{color:var(--ok-bright)}
+  .verdict[data-level=warn]{border-left-color:var(--warn)} .verdict[data-level=warn] .lead{color:var(--warn-bright)}
+  .verdict[data-level=no]{border-left-color:var(--gap)} .verdict[data-level=no] .lead{color:var(--gap-bright)}
+  .verdict[data-level=idle]{border-left-color:var(--line)} .verdict[data-level=idle] .lead{color:var(--ink-faint)}
+
+  .reroll{margin-top:15px;border:1px solid #5a3018;background:#22140d;border-radius:2px;padding:13px 15px}
+  .reroll .k{font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ember-soft)}
+  .reroll .v{display:block;margin-top:5px;font-size:14.5px}
+  .reroll s{color:var(--ink-faint);text-decoration-color:var(--gap)}
+  .reroll .note{display:block;margin-top:6px;font-size:12.5px;color:var(--ink-faint)}
+
+  .lines{list-style:none;margin:15px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+  .lines li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:9px;align-items:baseline;
+    font-size:14px;padding:5px 0;border-bottom:1px solid var(--line-soft)}
+  .lines li:last-child{border-bottom:0}
+  .lines .mark{font-family:var(--mono);font-size:12px;line-height:1}
+  .lines .hit .mark{color:var(--ok)} .lines .miss .mark{color:var(--ink-faint)} .lines .extra .mark{color:var(--warn)}
+  .lines .val{font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+  .lines .miss span:not(.mark){color:var(--ink-faint)}
+
+  .slotpick{display:flex;flex-wrap:wrap;gap:5px;margin-top:11px}
+  .slotpick button{font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+    background:transparent;border:1px solid var(--line);color:var(--ink-faint);border-radius:2px;padding:5px 9px;cursor:pointer}
+  .slotpick button[aria-pressed=true]{border-color:var(--ember);color:var(--ember-soft);background:#22140d}
+
+  .warnbox{margin:13px 0 0;border-left:2px solid var(--warn);padding-left:11px;color:var(--warn-bright);font-size:13px}
+
+  details.debug{margin-top:20px;border:1px solid var(--line);border-radius:3px;background:var(--panel)}
+  details.debug summary{cursor:pointer;padding:12px 16px;font-family:var(--mono);font-size:11px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+  details.debug .body{padding:0 16px 16px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+  details.debug canvas{width:100%;image-rendering:pixelated;border:1px solid var(--line-soft);background:#fff}
+  pre.raw{font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);background:#100d0b;border:1px solid var(--line-soft);
+    padding:11px;border-radius:2px;max-height:220px;overflow:auto;white-space:pre-wrap;margin:0}
+  textarea{width:100%;min-height:150px;background:#100d0b;color:var(--ink-dim);border:1px solid var(--line-soft);
+    border-radius:2px;font-family:var(--mono);font-size:11.5px;padding:10px;resize:vertical}
+
+  footer.foot{margin-top:36px;border-top:1px solid var(--line);padding-top:17px;color:var(--ink-faint);font-size:12.5px}
+  @media (max-width:980px){.stage{grid-template-columns:minmax(0,1fr)} details.debug .body{grid-template-columns:minmax(0,1fr)}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<header class="top">
+  <div>
+    <p class="eyebrow">Diablo IV · Season 15 · Hexenmeister · Lodernder Schrei</p>
+    <h1>Tooltip-Leser</h1>
+    <p class="sub">Liest den Item-Tooltip und sagt, ob das Teil etwas taugt.</p>
+  </div>
+  <div class="status" id="status"><span class="dot"></span><span id="status-text">nicht verbunden</span></div>
+</header>
+
+<div class="modes" id="modes">
+  <button type="button" data-mode="screen" aria-pressed="true">Bildschirm · PC</button>
+  <button type="button" data-mode="camera" aria-pressed="false">Kamera · Tablet</button>
+</div>
+
+<div class="stage">
+
+  <div class="card">
+    <h2 id="src-title">Bildquelle</h2>
+    <p class="hint" id="src-hint"></p>
+
+    <div class="steps" id="steps-screen">
+      <button class="act" id="btn-share" type="button">Spielfenster freigeben</button>
+      <button class="act ghost" id="btn-pick" type="button" disabled>Tooltip-Bereich markieren</button>
+      <button class="act ghost" id="btn-auto" type="button" aria-pressed="false" disabled>Automatisch lesen</button>
+      <button class="act ghost" id="btn-once" type="button" disabled>Jetzt lesen</button>
+    </div>
+
+    <div class="steps" id="steps-camera" hidden>
+      <button class="act" id="btn-cam" type="button">Kamera starten</button>
+      <button class="act" id="btn-shot" type="button" disabled>Item erfassen</button>
+      <button class="act ghost" id="btn-again" type="button" hidden>Nächstes Item</button>
+    </div>
+
+    <div class="viewport" id="viewport">
+      <video id="video" autoplay muted playsinline hidden></video>
+      <canvas class="shot" id="shot" hidden></canvas>
+      <p class="empty" id="empty">Noch keine Quelle. Oben auswählen und starten.</p>
+      <div id="selbox"></div>
+      <div id="guide"></div>
+    </div>
+
+    <p class="warnbox" id="throttle" hidden></p>
+
+    <div class="row">
+      <label for="thrmode">Schwelle</label>
+      <select id="thrmode">
+        <option value="adaptive">adaptiv</option>
+        <option value="global">fest</option>
+      </select>
+      <input type="range" id="thr" min="20" max="220" value="120">
+      <span class="status" id="thr-val" style="min-width:3ch">120</span>
+      <label for="scale" style="margin-left:6px">Vergrößerung</label>
+      <input type="range" id="scale" min="1" max="4" step="1" value="2">
+      <span class="status" id="scale-val">2×</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Urteil</h2>
+    <p class="hint" id="verdict-hint">Noch nichts gelesen.</p>
+    <div id="verdict-host">
+      <div class="verdict" data-level="idle">
+        <span class="lead">Warte auf einen Tooltip.</span>
+        <span class="sub">Quelle starten, dann geht es los.</span>
+      </div>
+    </div>
+    <div class="slotpick" id="slotpick"></div>
+    <ul class="lines" id="lines"></ul>
+  </div>
+
+</div>
+
+<details class="debug">
+  <summary>Werkstatt — was die Erkennung sieht</summary>
+  <div class="body">
+    <div>
+      <p class="eyebrow">Vorverarbeitetes Bild</p>
+      <canvas id="proc"></canvas>
+      <p class="eyebrow" style="margin-top:16px">Rohtext</p>
+      <pre class="raw" id="raw">—</pre>
+    </div>
+    <div>
+      <p class="eyebrow">Affix-Wörterbuch</p>
+      <p class="hint" style="margin-top:6px">Eine Zeile pro Affix, genau wie im deutschen Client. Stimmt eine
+        Schreibweise nicht, korrigier sie hier — wird sofort übernommen und gespeichert.</p>
+      <textarea id="dict" spellcheck="false"></textarea>
+      <div class="row">
+        <button class="act ghost" id="dict-reset" type="button">Zurücksetzen</button>
+        <span class="status" id="dict-count"></span>
+      </div>
+    </div>
+  </div>
+</details>
+
+<footer class="foot">
+  <p>Läuft vollständig auf deinem Gerät. Nichts wird hochgeladen, nichts installiert, nichts am Spiel verändert.
+    Texterkennung: Tesseract.js mit deutschem Sprachmodell.</p>
+  <p>Zielwerte aus Mekunas Lodernder-Schrei-Leveling-Build, Datensatz vom 14.09.2026.</p>
+</footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/7.0.0/tesseract.min.js"></script>
+<script>
+"use strict";
+
+/* ===================== Build-Ziele ===================== */
+const TARGETS = {
+  helm:    { de:"Helm",        want:["Willenskraft","Maximales Leben","Rüstung","Alle Widerstände"],        temper:"Maximales Leben",      sockets:2 },
+  chest:   { de:"Brustpanzer", want:["Willenskraft","Maximales Leben","Rüstung","Alle Widerstände"],        temper:"Maximales Leben",      sockets:2 },
+  gloves:  { de:"Handschuhe",  want:["Willenskraft","Maximales Leben","Angriffsgeschwindigkeit","Feuerschaden"], temper:"Dämonologie-Schaden", sockets:0 },
+  pants:   { de:"Hose",        want:["Willenskraft","Maximales Leben","Rüstung","Alle Widerstände"],        temper:"Maximales Leben",      sockets:2 },
+  boots:   { de:"Stiefel",     want:["Willenskraft","Maximales Leben","Rüstung","Bewegungstempo"],          temper:"Bewegungstempo",       sockets:0 },
+  weapon:  { de:"Waffe",       want:["Willenskraft","Maximales Leben","Schaden","Angriffsgeschwindigkeit"], temper:"Angriffstempo / Krit", sockets:2 },
+  amulet:  { de:"Amulett",     want:["Willenskraft","Maximales Leben","Angriffsgeschwindigkeit","Feuerschaden"], temper:"Dämonologie-Schaden", sockets:1 },
+  ring:    { de:"Ring",        want:["Willenskraft","Maximales Leben","Angriffsgeschwindigkeit","Schaden"], temper:"Dämonologie-Schaden",  sockets:1 }
+};
+
+const TYPE_HINTS = [
+  ["helm",   ["helm","kopfschutz","kappe","haube","krone"]],
+  ["chest",  ["brustrüstung","brustpanzer","robe","harnisch","wams"]],
+  ["gloves", ["handschuhe","fäustlinge","stulpen"]],
+  ["pants",  ["hose","beinschutz","beinlinge"]],
+  ["boots",  ["stiefel","schuhe","treter"]],
+  ["amulet", ["amulett","halskette"]],
+  ["ring",   ["ring","siegelring"]],
+  ["weapon", ["zweihandschwert","schwert","axt","streitkolben","stab","zauberstab","dolch","speer","hellebarde","kriegshammer","bogen","armbrust","sense"]]
+];
+
+const DEFAULT_DICT = [
+  "Willenskraft","Stärke","Geschicklichkeit","Intelligenz",
+  "Maximales Leben","Rüstung","Alle Widerstände",
+  "Angriffsgeschwindigkeit","Bewegungstempo","Schaden","Feuerschaden","Kälteschaden","Blitzschaden","Schattenschaden","Giftschaden",
+  "Kritischer Trefferschaden","Kritische Trefferchance","Verstärkter Schaden","Glückstrefferchance",
+  "Schaden gegen Elitegegner","Schaden gegen verletzte Gegner","Schaden gegen nahe Gegner","Schaden gegen entfernte Gegner",
+  "Kernfertigkeitsschaden","Grundfertigkeitsschaden","Schadensreduzierung","Abklingzeitreduzierung",
+  "Ressourcenerzeugung","Maximale Essenz","Lebensregeneration","Dämonologie-Schaden",
+  "Widerstand gegen Feuer","Widerstand gegen Kälte","Widerstand gegen Blitz","Widerstand gegen Schatten","Widerstand gegen Gift",
+  "Überwältigungsschaden","Verlangsamungsdauer","Rüstungsdurchdringung"
+];
+
+/* ===================== Zustand ===================== */
+let mode = "screen";
+let stream=null, worker=null, workerLoading=false;
+let rect=null;                       // Bildschirm-Modus: normalisierter Ausschnitt
+let autoMode=false, loopId=null, lastSig=null, stableTicks=0, pendingChange=false, ocrBusy=false;
+let slotOverride=null, lastLines=null, frozen=false;
+let cropOrigin={x:0,y:0,mult:2};     // Rückrechnung OCR-Koordinaten → Quellbild
+let DICT = loadDict();
+
+const $ = id => document.getElementById(id);
+const video=$("video"), viewport=$("viewport"), selbox=$("selbox"), guide=$("guide");
+const shot=$("shot"), shotCtx=shot.getContext("2d");
+const procCanvas=$("proc"), procCtx=procCanvas.getContext("2d",{willReadFrequently:true});
+const grab=document.createElement("canvas"), grabCtx=grab.getContext("2d",{willReadFrequently:true});
+const frozenFrame=document.createElement("canvas"), frozenCtx=frozenFrame.getContext("2d");
+const sig=document.createElement("canvas"); sig.width=24; sig.height=24;
+const sigCtx=sig.getContext("2d",{willReadFrequently:true});
+
+/* ===================== Wörterbuch ===================== */
+function loadDict(){
+  try{ const s=localStorage.getItem("d4scan-dict"); if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length) return a; } }catch(e){}
+  return DEFAULT_DICT.slice();
+}
+function saveDict(){ try{ localStorage.setItem("d4scan-dict", JSON.stringify(DICT)); }catch(e){} }
+function syncDictUI(){ $("dict").value=DICT.join("\n"); $("dict-count").textContent=DICT.length+" Einträge"; }
+$("dict").addEventListener("input", ()=>{
+  DICT=$("dict").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  $("dict-count").textContent=DICT.length+" Einträge"; saveDict();
+  if(lastLines) evaluate(lastLines);
+});
+$("dict-reset").addEventListener("click", ()=>{ DICT=DEFAULT_DICT.slice(); saveDict(); syncDictUI(); if(lastLines) evaluate(lastLines); });
+syncDictUI();
+
+/* ===================== Textabgleich ===================== */
+function norm(s){
+  return s.toLowerCase().replace(/ä/g,"a").replace(/ö/g,"o").replace(/ü/g,"u").replace(/ß/g,"ss")
+    .replace(/[^a-z\s]/g," ").replace(/\s+/g," ").trim();
+}
+function lev(a,b){
+  if(a===b) return 0;
+  const m=a.length,n=b.length; if(!m) return n; if(!n) return m;
+  let prev=new Array(n+1), cur=new Array(n+1);
+  for(let j=0;j<=n;j++) prev[j]=j;
+  for(let i=1;i<=m;i++){
+    cur[0]=i;
+    for(let j=1;j<=n;j++) cur[j]=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+    const t=prev; prev=cur; cur=t;
+  }
+  return prev[n];
+}
+function similarity(a,b){ const L=Math.max(a.length,b.length); return L?1-lev(a,b)/L:0; }
+function bestMatch(text){
+  const t=norm(text); if(t.length<3) return null;
+  let best=null, score=0;
+  for(const cand of DICT){ const s=similarity(t,norm(cand)); if(s>score){score=s;best=cand;} }
+  return score>=0.68 ? {name:best,score} : null;
+}
+function parseLine(line){
+  const num=line.match(/([0-9]+(?:[.,][0-9]+)?)\s*%?/);
+  const value=num?num[0].trim():"";
+  const text=line.replace(/[+\-–—]?\s*[0-9]+(?:[.,][0-9]+)?\s*%?/g," ")
+    .replace(/\[[^\]]*\]/g," ").replace(/[^\p{L}\s]/gu," ").replace(/\s+/g," ").trim();
+  return {value,text};
+}
+
+/* ===================== Modus ===================== */
+$("modes").addEventListener("click", e=>{
+  const b=e.target.closest("button[data-mode]"); if(!b) return;
+  setMode(b.dataset.mode);
+});
+function setMode(m){
+  if(m===mode) return;
+  stopAll();
+  mode=m;
+  [...$("modes").children].forEach(b=>b.setAttribute("aria-pressed", b.dataset.mode===m?"true":"false"));
+  $("steps-screen").hidden = m!=="screen";
+  $("steps-camera").hidden = m!=="camera";
+  viewport.classList.toggle("tall", m==="camera");
+  $("src-title").textContent = m==="screen" ? "Bildquelle" : "Kamera";
+  $("src-hint").textContent = m==="screen"
+    ? "Diablo im randlosen Fenstermodus starten — im exklusiven Vollbild liefert die Freigabe ein schwarzes Bild."
+    : "Tablet auf einen Ständer, Tooltip im Spiel stehen lassen, Rahmen ausfüllen, erfassen. Möglichst frontal und ohne Spiegelung.";
+  $("thrmode").value = m==="camera" ? "adaptive" : "global";
+  selbox.style.display="none"; guide.style.display="none";
+  resetVerdict();
+}
+$("src-hint").textContent="Diablo im randlosen Fenstermodus starten — im exklusiven Vollbild liefert die Freigabe ein schwarzes Bild.";
+
+function setStatus(text, cls){ $("status-text").textContent=text; $("status").className="status"+(cls?" "+cls:""); }
+
+function stopAll(){
+  autoMode=false; $("btn-auto").setAttribute("aria-pressed","false");
+  if(loopId){ clearInterval(loopId); loopId=null; }
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; }
+  video.hidden=true; shot.hidden=true; frozen=false;
+  $("empty").hidden=false; $("throttle").hidden=true;
+  ["btn-pick","btn-auto","btn-once"].forEach(id=>$(id).disabled=true);
+  $("btn-shot").disabled=true; $("btn-again").hidden=true;
+  setStatus("nicht verbunden","");
+}
+
+/* ===================== Bildschirm freigeben ===================== */
+$("btn-share").addEventListener("click", async ()=>{
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
+    setStatus("Bildschirmfreigabe von diesem Browser nicht unterstützt",""); return;
+  }
+  try{ stream = await navigator.mediaDevices.getDisplayMedia({ video:{frameRate:10}, audio:false }); }
+  catch(e){ setStatus("Freigabe abgebrochen",""); return; }
+  attachStream();
+  ["btn-pick","btn-auto","btn-once"].forEach(id=>$(id).disabled=false);
+  setStatus("verbunden — Bereich markieren","live");
+  restoreRect();
+  ensureWorker();
+});
+
+/* ===================== Kamera ===================== */
+$("btn-cam").addEventListener("click", async ()=>{
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    setStatus("Kamera von diesem Browser nicht unterstützt",""); return;
+  }
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({
+      video:{ facingMode:{ideal:"environment"}, width:{ideal:1920}, height:{ideal:1440} }, audio:false });
+  }catch(e){ setStatus("Kamera nicht freigegeben",""); return; }
+  attachStream();
+  $("btn-shot").disabled=false;
+  setStatus("Kamera läuft","live");
+  drawGuide();
+  ensureWorker();
+});
+$("btn-shot").addEventListener("click", ()=>{
+  if(frozen && frozenFrame.width){ cropFrom(frozenFrame, guideRect()); runOcr(true); }
+  else capturePhoto();
+});
+$("btn-again").addEventListener("click", ()=>{
+  frozen=false; shot.hidden=true; video.hidden=false; $("btn-again").hidden=true;
+  $("btn-shot").textContent="Item erfassen"; drawGuide(); setStatus("Kamera läuft","live");
+});
+
+function attachStream(){
+  video.srcObject=stream; video.hidden=false; shot.hidden=true; $("empty").hidden=true;
+  const track=stream.getVideoTracks()[0];
+  if(track) track.addEventListener("ended", stopAll);
+  video.play().catch(()=>{});
+}
+
+/* Der Ausschnitt, den die Kamera auswertet: mittig, hochkant, wie ein Tooltip */
+function guideRect(){ return { x:0.20, y:0.06, w:0.60, h:0.88 }; }
+function drawGuide(){
+  if(mode!=="camera"||!video.videoWidth||frozen){ guide.style.display="none"; return; }
+  const d=displayRect(), g=guideRect();
+  guide.style.display="block";
+  guide.style.left=(d.left+g.x*d.width)+"px";
+  guide.style.top=(d.top+g.y*d.height)+"px";
+  guide.style.width=(g.w*d.width)+"px";
+  guide.style.height=(g.h*d.height)+"px";
+}
+video.addEventListener("loadedmetadata", ()=>{ drawGuide(); drawSelBox(); });
+
+async function capturePhoto(){
+  if(!video.videoWidth) return;
+  // Einmal einfrieren — alles Weitere arbeitet auf genau diesem Bild, nicht auf dem Livebild
+  frozenFrame.width=video.videoWidth; frozenFrame.height=video.videoHeight;
+  frozenCtx.drawImage(video,0,0);
+  shot.width=frozenFrame.width; shot.height=frozenFrame.height;
+  shotCtx.drawImage(frozenFrame,0,0);
+  shot.hidden=false; video.hidden=true; frozen=true;
+  guide.style.display="none";
+  $("btn-shot").textContent="Erneut auswerten"; $("btn-again").hidden=false;
+  cropFrom(frozenFrame, guideRect());
+  await runOcr(true);
+}
+
+/* ===================== Ausschnitt markieren (Bildschirm) ===================== */
+let picking=false, startPt=null;
+$("btn-pick").addEventListener("click", ()=>{
+  picking=true; viewport.classList.add("picking"); setStatus("zieh ein Rechteck über den Tooltip","busy");
+});
+viewport.addEventListener("pointerdown", e=>{
+  if(!picking) return;
+  const b=viewport.getBoundingClientRect();
+  startPt={x:e.clientX-b.left,y:e.clientY-b.top};
+  selbox.style.display="block";
+  selbox.style.left=startPt.x+"px"; selbox.style.top=startPt.y+"px";
+  selbox.style.width="0px"; selbox.style.height="0px";
+  try{ viewport.setPointerCapture(e.pointerId); }catch(err){}
+});
+viewport.addEventListener("pointermove", e=>{
+  if(!picking||!startPt) return;
+  const b=viewport.getBoundingClientRect();
+  const x=e.clientX-b.left,y=e.clientY-b.top;
+  selbox.style.left=Math.min(x,startPt.x)+"px"; selbox.style.top=Math.min(y,startPt.y)+"px";
+  selbox.style.width=Math.abs(x-startPt.x)+"px"; selbox.style.height=Math.abs(y-startPt.y)+"px";
+});
+viewport.addEventListener("pointerup", e=>{
+  if(!picking||!startPt) return;
+  picking=false; viewport.classList.remove("picking");
+  const b=viewport.getBoundingClientRect();
+  const x=e.clientX-b.left,y=e.clientY-b.top;
+  const l=Math.min(x,startPt.x), t=Math.min(y,startPt.y);
+  const w=Math.abs(x-startPt.x), h=Math.abs(y-startPt.y);
+  startPt=null;
+  if(w<24||h<24){ selbox.style.display="none"; setStatus("Bereich zu klein — nochmal","live"); return; }
+  const d=displayRect();
+  rect={ x:(l-d.left)/d.width, y:(t-d.top)/d.height, w:w/d.width, h:h/d.height };
+  try{ localStorage.setItem("d4scan-rect", JSON.stringify(rect)); }catch(err){}
+  setStatus("Bereich gesetzt","live");
+  readOnce();
+});
+function displayRect(){
+  const b=viewport.getBoundingClientRect();
+  const vw=video.videoWidth||16, vh=video.videoHeight||9;
+  const s=Math.min(b.width/vw, b.height/vh);
+  const w=vw*s, h=vh*s;
+  return { left:(b.width-w)/2, top:(b.height-h)/2, width:w, height:h };
+}
+function restoreRect(){
+  try{ const s=localStorage.getItem("d4scan-rect"); if(s){ rect=JSON.parse(s); drawSelBox(); } }catch(e){}
+}
+function drawSelBox(){
+  if(mode!=="screen"||!rect||!video.videoWidth) return;
+  const d=displayRect();
+  selbox.style.display="block";
+  selbox.style.left=(d.left+rect.x*d.width)+"px";
+  selbox.style.top=(d.top+rect.y*d.height)+"px";
+  selbox.style.width=(rect.w*d.width)+"px";
+  selbox.style.height=(rect.h*d.height)+"px";
+}
+window.addEventListener("resize", ()=>{ drawSelBox(); drawGuide(); });
+
+/* ===================== Bild vorbereiten ===================== */
+function cropFrom(source, r){
+  const sw0=source.videoWidth||source.width, sh0=source.videoHeight||source.height;
+  const sx=Math.round(r.x*sw0), sy=Math.round(r.y*sh0);
+  const sw=Math.max(8,Math.round(r.w*sw0)), sh=Math.max(8,Math.round(r.h*sh0));
+  let mult=parseInt($("scale").value,10);
+  // Zu große Flächen bremsen mobile Geräte aus
+  while(sw*mult*sh*mult > 6.0e6 && mult>1) mult--;
+  grab.width=sw*mult; grab.height=sh*mult;
+  grabCtx.imageSmoothingEnabled=true; grabCtx.imageSmoothingQuality="high";
+  grabCtx.drawImage(source, sx,sy,sw,sh, 0,0, grab.width, grab.height);
+  cropOrigin={ x:sx, y:sy, mult };
+  return true;
+}
+function toGray(data,w,h){
+  const g=new Float32Array(w*h);
+  for(let i=0,j=0;i<data.length;i+=4,j++) g[j]=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+  return g;
+}
+/* Lokale Schwelle über Integralbild — nötig, sobald das Licht ungleichmäßig ist (Kamera). */
+function adaptive(g,w,h,radius,bias){
+  const I=new Float64Array((w+1)*(h+1));
+  for(let y=0;y<h;y++){
+    let rowSum=0;
+    for(let x=0;x<w;x++){
+      rowSum+=g[y*w+x];
+      I[(y+1)*(w+1)+(x+1)] = I[y*(w+1)+(x+1)] + rowSum;
+    }
+  }
+  const out=new Uint8Array(w*h);
+  for(let y=0;y<h;y++){
+    const y0=Math.max(0,y-radius), y1=Math.min(h-1,y+radius);
+    for(let x=0;x<w;x++){
+      const x0=Math.max(0,x-radius), x1=Math.min(w-1,x+radius);
+      const area=(x1-x0+1)*(y1-y0+1);
+      const s=I[(y1+1)*(w+1)+(x1+1)] - I[y0*(w+1)+(x1+1)] - I[(y1+1)*(w+1)+x0] + I[y0*(w+1)+x0];
+      const mean=s/area;
+      out[y*w+x] = g[y*w+x] > mean+bias ? 0 : 255;  // helle Schrift → schwarz auf weiß
+    }
+  }
+  return out;
+}
+function preprocess(){
+  const w=grab.width, h=grab.height;
+  const img=grabCtx.getImageData(0,0,w,h), p=img.data;
+  const g=toGray(p,w,h);
+  if($("thrmode").value==="adaptive"){
+    const radius=Math.max(6, Math.round(h/28));
+    const bias=Math.max(4, Math.round((parseInt($("thr").value,10)-120)/6)+8);
+    const bin=adaptive(g,w,h,radius,bias);
+    for(let i=0,j=0;i<p.length;i+=4,j++){ p[i]=p[i+1]=p[i+2]=bin[j]; p[i+3]=255; }
+  }else{
+    const thr=parseInt($("thr").value,10);
+    for(let i=0,j=0;i<p.length;i+=4,j++){ const v=g[j]>thr?0:255; p[i]=p[i+1]=p[i+2]=v; p[i+3]=255; }
+  }
+  procCanvas.width=w; procCanvas.height=h;
+  procCtx.putImageData(img,0,0);
+}
+function signature(){
+  sigCtx.drawImage(grab,0,0,sig.width,sig.height);
+  const d=sigCtx.getImageData(0,0,sig.width,sig.height).data;
+  const out=new Uint8Array(sig.width*sig.height);
+  for(let i=0,j=0;i<d.length;i+=4,j++) out[j]=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])|0;
+  return out;
+}
+function sigDiff(a,b){
+  if(!a||!b||a.length!==b.length) return 999;
+  let s=0; for(let i=0;i<a.length;i++) s+=Math.abs(a[i]-b[i]);
+  return s/a.length;
+}
+
+/* ===================== Texterkennung ===================== */
+async function ensureWorker(){
+  if(worker||workerLoading) return;
+  workerLoading=true;
+  setStatus("lade Texterkennung …","busy");
+  try{
+    worker = await Tesseract.createWorker("deu");
+    await worker.setParameters({ tessedit_pageseg_mode:"6" });
+    setStatus("bereit","live");
+  }catch(e){ setStatus("Texterkennung konnte nicht laden",""); }
+  finally{ workerLoading=false; }
+}
+async function readOnce(){
+  if(mode==="screen" && !rect){ setStatus("erst den Tooltip-Bereich markieren","busy"); return; }
+  if(mode==="screen"){ if(!video.videoWidth) return; cropFrom(video, rect); }
+  await runOcr(false);
+}
+async function runOcr(withOverlay){
+  await ensureWorker();
+  if(!worker||ocrBusy) return;
+  preprocess();
+  ocrBusy=true; setStatus("lese …","busy");
+  try{
+    const res = await worker.recognize(procCanvas, {}, { text:true, blocks:true });
+    const raw = (res.data && res.data.text) || "";
+    $("raw").textContent = raw.trim() || "—";
+    const lines = collectLines(res.data, raw);
+    const result = evaluate(lines);
+    if(withOverlay) drawOverlay(result);
+    setStatus(autoMode ? "beobachte" : "gelesen","live");
+  }catch(e){
+    setStatus("Lesefehler — Werkstatt öffnen","");
+  }finally{ ocrBusy=false; }
+}
+/* Zeilen inklusive Position; fällt auf reinen Text zurück, falls keine Boxen kommen */
+function collectLines(data, raw){
+  const out=[];
+  const blocks=data && data.blocks;
+  if(Array.isArray(blocks) && blocks.length){
+    blocks.forEach(b=>(b.paragraphs||[]).forEach(p=>(p.lines||[]).forEach(l=>{
+      const t=(l.text||"").replace(/\n/g,"").trim();
+      if(t.length>2) out.push({ text:t, bbox:l.bbox||null, conf:l.confidence });
+    })));
+  }
+  if(out.length) return out;
+  return raw.split("\n").map(s=>s.trim()).filter(s=>s.length>2).map(t=>({text:t,bbox:null}));
+}
+
+/* ===================== Auswertung ===================== */
+function detectSlot(lines){
+  for(const l of lines){
+    const t=norm(l.text);
+    for(const [slot,words] of TYPE_HINTS) for(const w of words) if(t.includes(norm(w))) return slot;
+  }
+  return null;
+}
+function evaluate(lines){
+  lastLines=lines;
+  const slot = slotOverride || detectSlot(lines) || "helm";
+  renderSlotPick(slot);
+  const target=TARGETS[slot];
+
+  const found=[], annotated=[];
+  lines.forEach(l=>{
+    const p=parseLine(l.text);
+    if(p.text.length<4){ annotated.push({bbox:l.bbox,kind:"none"}); return; }
+    const m=bestMatch(p.text);
+    if(!m){ annotated.push({bbox:l.bbox,kind:"none"}); return; }
+    const isTarget = target.want.includes(m.name);
+    if(!found.some(f=>f.name===m.name)) found.push({name:m.name, value:p.value});
+    annotated.push({ bbox:l.bbox, kind:isTarget?"hit":"extra", label:m.name });
+  });
+
+  const hits=target.want.filter(w=>found.some(f=>f.name===w));
+  const missing=target.want.filter(w=>!found.some(f=>f.name===w));
+  const extras=found.filter(f=>!target.want.includes(f.name));
+  const hasWill=hits.includes("Willenskraft");
+
+  let level,lead,sub;
+  if(!found.length){ level="idle"; lead="Nichts erkannt."; sub="Rahmen füllen oder Schwelle nachziehen — die Werkstatt zeigt, was ankommt."; }
+  else if(hits.length>=3){ level="ok"; lead="Anlegen."; sub=hits.length+" von 4 Zielwerten sitzen."; }
+  else if(hits.length===2 && extras.length<=1){ level="warn"; lead="Grenzfall — ein Wert umrollen."; sub="Zwei Treffer, einer lässt sich beim Okkultisten ersetzen."; }
+  else if(hits.length===2){ level="warn"; lead="Nur bei höherer Itempower."; sub="Zwei Treffer, aber zwei Fehlwürfe — du darfst nur einen ersetzen."; }
+  else { level="no"; lead="Verwerten."; sub="Zu wenig Überschneidung mit dem Ziel für "+target.de+"."; }
+  if(found.length && !hasWill && level!=="no") sub+=" Willenskraft fehlt — der Wert, an dem hier fast alles hängt.";
+
+  const rerollFrom = (extras.length && missing.length && level!=="no" && level!=="idle") ? extras[0].name : null;
+  const rerollTo = rerollFrom ? missing[0] : null;
+  if(rerollFrom) annotated.forEach(a=>{ if(a.kind==="extra" && a.label===rerollFrom) a.kind="reroll"; });
+
+  renderVerdict({level,lead,sub,target,found,hits,missing,extras,rerollFrom,rerollTo});
+  $("verdict-hint").textContent = found.length ? target.de+" · "+found.length+" Affixe gelesen" : "Noch nichts erkannt.";
+  return { annotated, rerollFrom };
+}
+
+function renderVerdict(r){
+  const host=$("verdict-host"); host.innerHTML="";
+  const v=document.createElement("div"); v.className="verdict"; v.dataset.level=r.level;
+  const l=document.createElement("span"); l.className="lead"; l.textContent=r.lead;
+  const s=document.createElement("span"); s.className="sub"; s.textContent=r.sub;
+  v.append(l,s); host.appendChild(v);
+
+  if(r.rerollFrom){
+    const box=document.createElement("div"); box.className="reroll";
+    const k=document.createElement("span"); k.className="k"; k.textContent="Beim Okkultisten umrollen";
+    const val=document.createElement("span"); val.className="v";
+    val.innerHTML="<s>"+esc(r.rerollFrom)+"</s> &nbsp;→&nbsp; <strong>"+esc(r.rerollTo)+"</strong>";
+    const n=document.createElement("span"); n.className="note";
+    n.textContent="Einschmelzen danach auf: "+r.target.temper+(r.target.sockets?" · "+r.target.sockets+" Sockel füllen":"");
+    box.append(k,val,n); host.appendChild(box);
+  }
+
+  const ul=$("lines"); ul.innerHTML="";
+  r.target.want.forEach(w=>{
+    const f=r.found.find(x=>x.name===w);
+    const li=document.createElement("li"); li.className=f?"hit":"miss";
+    li.innerHTML='<span class="mark">'+(f?"●":"○")+'</span><span>'+esc(w)+'</span><span class="val">'+esc(f?(f.value||"vorhanden"):"fehlt")+'</span>';
+    ul.appendChild(li);
+  });
+  r.extras.forEach(f=>{
+    const li=document.createElement("li"); li.className="extra";
+    li.innerHTML='<span class="mark">◆</span><span>'+esc(f.name)+'</span><span class="val">'+esc(f.value||"")+'</span>';
+    ul.appendChild(li);
+  });
+}
+function resetVerdict(){
+  $("verdict-host").innerHTML='<div class="verdict" data-level="idle"><span class="lead">Warte auf einen Tooltip.</span><span class="sub">Quelle starten, dann geht es los.</span></div>';
+  $("lines").innerHTML=""; $("verdict-hint").textContent="Noch nichts gelesen."; lastLines=null;
+}
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+
+function renderSlotPick(active){
+  const host=$("slotpick");
+  if(host.dataset.built!=="1"){
+    Object.keys(TARGETS).forEach(k=>{
+      const b=document.createElement("button"); b.type="button"; b.dataset.slot=k; b.textContent=TARGETS[k].de;
+      b.addEventListener("click", ()=>{
+        slotOverride = slotOverride===k ? null : k;
+        if(lastLines){ const res=evaluate(lastLines); if(frozen) drawOverlay(res); }
+      });
+      host.appendChild(b);
+    });
+    host.dataset.built="1";
+  }
+  [...host.children].forEach(b=>b.setAttribute("aria-pressed", b.dataset.slot===active?"true":"false"));
+}
+
+/* ===================== Overlay auf dem Standbild ===================== */
+function drawOverlay(result){
+  if(!result || !shot.width || !frozenFrame.width) return;
+  shotCtx.drawImage(frozenFrame,0,0);
+  const m=cropOrigin.mult;
+  const colors={ hit:"rgba(111,154,95,.95)", reroll:"rgba(201,151,63,.95)", extra:"rgba(113,102,92,.8)", none:null };
+  shotCtx.lineWidth=Math.max(2, Math.round(shot.width/500));
+  shotCtx.font=Math.max(13, Math.round(shot.width/70))+"px system-ui, sans-serif";
+  result.annotated.forEach(a=>{
+    if(!a.bbox) return;
+    const c=colors[a.kind]; if(!c) return;
+    const x=cropOrigin.x + a.bbox.x0/m;
+    const y=cropOrigin.y + a.bbox.y0/m;
+    const w=(a.bbox.x1-a.bbox.x0)/m;
+    const h=(a.bbox.y1-a.bbox.y0)/m;
+    shotCtx.strokeStyle=c;
+    shotCtx.fillStyle=c.replace(/,\s*\.?\d+\)$/,",.16)");
+    shotCtx.fillRect(x,y,w,h);
+    shotCtx.strokeRect(x,y,w,h);
+    if(a.kind==="reroll"){
+      shotCtx.fillStyle=c;
+      shotCtx.fillText("umrollen", x+w+8, y+h*0.75);
+    }
+  });
+}
+
+/* ===================== Auto-Modus (Bildschirm) ===================== */
+let lastTickAt=0, slowTicks=0;
+function checkPace(){
+  const now=performance.now();
+  if(lastTickAt){
+    const gap=now-lastTickAt;
+    if(gap>900) slowTicks=Math.min(slowTicks+1,5); else slowTicks=Math.max(slowTicks-1,0);
+    const box=$("throttle");
+    if(slowTicks>=3){
+      box.hidden=false;
+      box.textContent = document.hidden
+        ? "Der Browser hat die Seite angehalten, weil das Fenster verdeckt oder minimiert ist."
+        : "Der Takt ist auf etwa "+Math.round(gap)+" ms eingebrochen — der Browser bremst im Hintergrund. Lass ein Stück des Fensters sichtbar.";
+    } else if(slowTicks===0) box.hidden=true;
+  }
+  lastTickAt=now;
+}
+document.addEventListener("visibilitychange", ()=>{
+  if(!autoMode) return;
+  if(document.hidden) setStatus("pausiert — Fenster verdeckt","busy");
+  else { slowTicks=0; $("throttle").hidden=true; setStatus("beobachte","live"); }
+});
+$("btn-auto").addEventListener("click", ()=>{
+  autoMode=!autoMode;
+  $("btn-auto").setAttribute("aria-pressed", autoMode?"true":"false");
+  if(autoMode){
+    lastSig=null; stableTicks=0; pendingChange=false; lastTickAt=0; slowTicks=0; $("throttle").hidden=true;
+    loopId=setInterval(tick,300); setStatus("beobachte","live");
+  }else{ clearInterval(loopId); loopId=null; setStatus("angehalten","live"); }
+});
+function tick(){
+  checkPace();
+  if(!rect||ocrBusy||!video.videoWidth) return;
+  cropFrom(video, rect);
+  const s=signature(), diff=sigDiff(lastSig,s);
+  lastSig=s;
+  if(diff>6){ pendingChange=true; stableTicks=0; return; }
+  if(pendingChange){ stableTicks++; if(stableTicks>=2){ pendingChange=false; stableTicks=0; runOcr(false); } }
+}
+$("btn-once").addEventListener("click", readOnce);
+
+/* ===================== Regler ===================== */
+function refreshPreview(){
+  if(mode==="camera" && frozen && frozenFrame.width) cropFrom(frozenFrame, guideRect());
+  else if(!video.videoWidth) return;
+  else if(mode==="screen" && rect) cropFrom(video, rect);
+  else if(mode==="camera") cropFrom(video, guideRect());
+  else return;
+  preprocess();
+}
+$("thr").addEventListener("input", ()=>{ $("thr-val").textContent=$("thr").value; refreshPreview(); });
+$("scale").addEventListener("input", ()=>{ $("scale-val").textContent=$("scale").value+"×"; refreshPreview(); });
+$("thrmode").addEventListener("change", refreshPreview);
+
+/* ===================== Start ===================== */
+renderSlotPick("helm");
+if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
+  // Tablet/Handy: Kamera ist hier der einzige sinnvolle Weg
+  setMode("camera");
+}
+</script>
+</body>
+</html>
