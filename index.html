@@ -105,6 +105,11 @@
     background:transparent;border:1px solid var(--line);color:var(--ink-faint);border-radius:2px;padding:5px 9px;cursor:pointer}
   .slotpick button[aria-pressed=true]{border-color:var(--ember);color:var(--ember-soft);background:#22140d}
 
+  .pickrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .pickrow .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint)}
+  .pickrow .modes{margin-top:0}
+  .verdict[data-level=keep]{border-left-color:var(--ember)} .verdict[data-level=keep] .lead{color:var(--ember-soft)}
+
   .warnbox{margin:13px 0 0;border-left:2px solid var(--warn);padding-left:11px;color:var(--warn-bright);font-size:13px}
 
   details.debug{margin-top:20px;border:1px solid var(--line);border-radius:3px;background:var(--panel)}
@@ -181,6 +186,11 @@
 <div class="modes" id="modes">
   <button type="button" data-mode="screen" aria-pressed="true">Bildschirm · PC</button>
   <button type="button" data-mode="camera" aria-pressed="false">Kamera · Tablet</button>
+</div>
+
+<div class="pickrow">
+  <span class="lbl">Build</span>
+  <div class="modes" id="builds"></div>
 </div>
 
 <div class="stage">
@@ -266,48 +276,14 @@
 <footer class="foot">
   <p>Läuft vollständig auf deinem Gerät. Nichts wird hochgeladen, nichts installiert, nichts am Spiel verändert.
     Texterkennung: Tesseract.js mit deutschem Sprachmodell.</p>
-  <p>Zielwerte aus Mekunas Lodernder-Schrei-Leveling-Build, Datensatz vom 14.09.2026.</p>
+  <p>Zielwerte aus Mekunas Lodernder Schrei auf InfinityBuilds, Datenstand 15.09.2026.</p>
 </footer>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/7.0.0/tesseract.min.js"></script>
+<script src="daten.js"></script>
 <script>
 "use strict";
-
-/* ===================== Build-Ziele ===================== */
-const TARGETS = {
-  helm:    { de:"Helm",        want:["Willenskraft","Maximales Leben","Rüstung","Alle Widerstände"],        temper:"Maximales Leben",      sockets:2 },
-  chest:   { de:"Brustpanzer", want:["Willenskraft","Maximales Leben","Rüstung","Alle Widerstände"],        temper:"Maximales Leben",      sockets:2 },
-  gloves:  { de:"Handschuhe",  want:["Willenskraft","Maximales Leben","Angriffsgeschwindigkeit","Feuerschaden"], temper:"Dämonologie-Schaden", sockets:0 },
-  pants:   { de:"Hose",        want:["Willenskraft","Maximales Leben","Rüstung","Alle Widerstände"],        temper:"Maximales Leben",      sockets:2 },
-  boots:   { de:"Stiefel",     want:["Willenskraft","Maximales Leben","Rüstung","Bewegungstempo"],          temper:"Bewegungstempo",       sockets:0 },
-  weapon:  { de:"Waffe",       want:["Willenskraft","Maximales Leben","Schaden","Angriffsgeschwindigkeit"], temper:"Angriffstempo / Krit", sockets:2 },
-  amulet:  { de:"Amulett",     want:["Willenskraft","Maximales Leben","Angriffsgeschwindigkeit","Feuerschaden"], temper:"Dämonologie-Schaden", sockets:1 },
-  ring:    { de:"Ring",        want:["Willenskraft","Maximales Leben","Angriffsgeschwindigkeit","Schaden"], temper:"Dämonologie-Schaden",  sockets:1 }
-};
-
-const TYPE_HINTS = [
-  ["helm",   ["helm","kopfschutz","kappe","haube","krone"]],
-  ["chest",  ["brustrüstung","brustpanzer","robe","harnisch","wams"]],
-  ["gloves", ["handschuhe","fäustlinge","stulpen"]],
-  ["pants",  ["hose","beinschutz","beinlinge"]],
-  ["boots",  ["stiefel","schuhe","treter"]],
-  ["amulet", ["amulett","halskette"]],
-  ["ring",   ["ring","siegelring"]],
-  ["weapon", ["zweihandschwert","schwert","axt","streitkolben","stab","zauberstab","dolch","speer","hellebarde","kriegshammer","bogen","armbrust","sense"]]
-];
-
-const DEFAULT_DICT = [
-  "Willenskraft","Stärke","Geschicklichkeit","Intelligenz",
-  "Maximales Leben","Rüstung","Alle Widerstände",
-  "Angriffsgeschwindigkeit","Bewegungstempo","Schaden","Feuerschaden","Kälteschaden","Blitzschaden","Schattenschaden","Giftschaden",
-  "Kritischer Trefferschaden","Kritische Trefferchance","Verstärkter Schaden","Glückstrefferchance",
-  "Schaden gegen Elitegegner","Schaden gegen verletzte Gegner","Schaden gegen nahe Gegner","Schaden gegen entfernte Gegner",
-  "Kernfertigkeitsschaden","Grundfertigkeitsschaden","Schadensreduzierung","Abklingzeitreduzierung",
-  "Ressourcenerzeugung","Maximale Essenz","Lebensregeneration","Dämonologie-Schaden",
-  "Widerstand gegen Feuer","Widerstand gegen Kälte","Widerstand gegen Blitz","Widerstand gegen Schatten","Widerstand gegen Gift",
-  "Überwältigungsschaden","Verlangsamungsdauer","Rüstungsdurchdringung"
-];
 
 /* ===================== Zustand ===================== */
 let mode = "screen";
@@ -315,6 +291,7 @@ let stream=null, worker=null, workerLoading=false;
 let rect=null;                       // Bildschirm-Modus: normalisierter Ausschnitt
 let autoMode=false, loopId=null, lastSig=null, stableTicks=0, pendingChange=false, ocrBusy=false;
 let slotOverride=null, lastLines=null, frozen=false;
+let activeBuild=(function(){ try{ return localStorage.getItem("d4scan-build")||"lvl"; }catch(e){ return "lvl"; } })();
 let cropOrigin={x:0,y:0,mult:2};     // Rückrechnung OCR-Koordinaten → Quellbild
 let DICT = loadDict();
 
@@ -329,8 +306,11 @@ const sigCtx=sig.getContext("2d",{willReadFrequently:true});
 
 /* ===================== Wörterbuch ===================== */
 function loadDict(){
-  try{ const s=localStorage.getItem("d4scan-dict"); if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length) return a; } }catch(e){}
-  return DEFAULT_DICT.slice();
+  let stored=null;
+  try{ const s=localStorage.getItem("d4scan-dict"); if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length) stored=a; } }catch(e){}
+  if(!stored) return DEFAULT_DICT.slice();
+  DEFAULT_DICT.forEach(d=>{ if(!stored.includes(d)) stored.push(d); });  // neue Affixe nachziehen
+  return stored;
 }
 function saveDict(){ try{ localStorage.setItem("d4scan-dict", JSON.stringify(DICT)); }catch(e){} }
 function syncDictUI(){ $("dict").value=DICT.join("\n"); $("dict-count").textContent=DICT.length+" Einträge"; }
@@ -659,6 +639,10 @@ function collectLines(data, raw){
 }
 
 /* ===================== Auswertung ===================== */
+function currentBuild(){ return BUILDS.find(b=>b.id===activeBuild) || BUILDS[0]; }
+function buildName(id){ const b=BUILDS.find(x=>x.id===id); return b?b.name:id; }
+function listDe(a){ return a.length<2 ? (a[0]||"") : a.slice(0,-1).join(", ")+" und "+a[a.length-1]; }
+
 function detectSlot(lines){
   for(const l of lines){
     const t=norm(l.text);
@@ -666,11 +650,27 @@ function detectSlot(lines){
   }
   return null;
 }
+
+/* Benanntes Teil erkennen — der Itemname steht als eigene Zeile im Tooltip. */
+function detectKeeper(lines){
+  let best=null, score=0.74;
+  lines.forEach(l=>{
+    const t=norm(l.text);
+    if(t.length<4) return;
+    KEEPERS.forEach(k=>{
+      const s=similarity(t, norm(k.name));
+      if(s>score){ score=s; best={ keeper:k, bbox:l.bbox }; }
+    });
+  });
+  return best;
+}
+
 function evaluate(lines){
   lastLines=lines;
+  const b=currentBuild();
   const slot = slotOverride || detectSlot(lines) || "helm";
   renderSlotPick(slot);
-  const target=TARGETS[slot];
+  const target=b.slots[slot];
 
   const found=[], annotated=[];
   lines.forEach(l=>{
@@ -688,20 +688,42 @@ function evaluate(lines){
   const extras=found.filter(f=>!target.want.includes(f.name));
   const hasWill=hits.includes("Willenskraft");
 
+  /* Braucht ein anderer Build dieses Teil? */
+  const alsoFor = BUILDS.filter(o=>o.id!==b.id).filter(o=>{
+    const t2=o.slots[slot];
+    return t2 && t2.want.filter(w=>found.some(f=>f.name===w)).length>=3;
+  }).map(o=>o.name);
+
+  const keep = detectKeeper(lines);
+  if(keep && keep.bbox) annotated.push({ bbox:keep.bbox, kind:"keeper" });
+
   let level,lead,sub;
-  if(!found.length){ level="idle"; lead="Nichts erkannt."; sub="Rahmen füllen oder Schwelle nachziehen — die Werkstatt zeigt, was ankommt."; }
+  if(keep){
+    level="keep"; lead="Nicht zerstören.";
+    sub=keep.keeper.name+" — festes Teil im "+listDe(keep.keeper.builds.map(buildName))+".";
+  }
+  else if(!found.length){ level="idle"; lead="Nichts erkannt."; sub="Rahmen füllen oder Schwelle nachziehen — die Werkstatt zeigt, was ankommt."; }
   else if(hits.length>=3){ level="ok"; lead="Anlegen."; sub=hits.length+" von 4 Zielwerten sitzen."; }
   else if(hits.length===2 && extras.length<=1){ level="warn"; lead="Grenzfall — ein Wert umrollen."; sub="Zwei Treffer, einer lässt sich beim Okkultisten ersetzen."; }
   else if(hits.length===2){ level="warn"; lead="Nur bei höherer Itempower."; sub="Zwei Treffer, aber zwei Fehlwürfe — du darfst nur einen ersetzen."; }
-  else { level="no"; lead="Verwerten."; sub="Zu wenig Überschneidung mit dem Ziel für "+target.de+"."; }
-  if(found.length && !hasWill && level!=="no") sub+=" Willenskraft fehlt — der Wert, an dem hier fast alles hängt.";
+  else if(alsoFor.length){ level="keep"; lead="Aufheben."; sub="Für "+b.name+" nichts, aber im "+listDe(alsoFor)+" passt es."; }
+  else { level="no"; lead="Verwerten."; sub="Zu wenig Überschneidung mit dem Ziel für "+(SLOT_DE[slot]||slot)+"."; }
 
-  const rerollFrom = (extras.length && missing.length && level!=="no" && level!=="idle") ? extras[0].name : null;
+  if(found.length && !hasWill && (level==="ok"||level==="warn")) sub+=" Willenskraft fehlt — der Wert, an dem hier fast alles hängt.";
+  if(!keep && alsoFor.length && level!=="keep"){
+    sub += level==="ok"
+      ? " Passt auch für "+listDe(alsoFor)+"."
+      : " Für "+listDe(alsoFor)+" taugt es aber — einlagern statt umrollen.";
+  }
+
+  const rerollFrom = (!keep && !alsoFor.length && extras.length && missing.length && (level==="ok"||level==="warn")) ? extras[0].name : null;
   const rerollTo = rerollFrom ? missing[0] : null;
   if(rerollFrom) annotated.forEach(a=>{ if(a.kind==="extra" && a.label===rerollFrom) a.kind="reroll"; });
 
-  renderVerdict({level,lead,sub,target,found,hits,missing,extras,rerollFrom,rerollTo});
-  $("verdict-hint").textContent = found.length ? target.de+" · "+found.length+" Affixe gelesen" : "Noch nichts erkannt.";
+  renderVerdict({level,lead,sub,target,slot,found,hits,missing,extras,rerollFrom,rerollTo,keep});
+  $("verdict-hint").textContent = found.length
+    ? (SLOT_DE[slot]||slot)+" · "+found.length+" Affixe gelesen · "+b.name
+    : "Noch nichts erkannt.";
   return { annotated, rerollFrom };
 }
 
@@ -712,7 +734,15 @@ function renderVerdict(r){
   const s=document.createElement("span"); s.className="sub"; s.textContent=r.sub;
   v.append(l,s); host.appendChild(v);
 
-  if(r.rerollFrom){
+  if(r.keep){
+    const box=document.createElement("div"); box.className="reroll";
+    const k=document.createElement("span"); k.className="k"; k.textContent="In die Truhe";
+    const val=document.createElement("span"); val.className="v"; val.textContent=r.keep.keeper.name;
+    const n=document.createElement("span"); n.className="note";
+    n.textContent="Slot "+(SLOT_DE[r.keep.keeper.slot]||r.keep.keeper.slot)+" · gebraucht im "+listDe(r.keep.keeper.builds.map(buildName));
+    box.append(k,val,n); host.appendChild(box);
+  }
+  else if(r.rerollFrom){
     const box=document.createElement("div"); box.className="reroll";
     const k=document.createElement("span"); k.className="k"; k.textContent="Beim Okkultisten umrollen";
     const val=document.createElement("span"); val.className="v";
@@ -723,6 +753,11 @@ function renderVerdict(r){
   }
 
   const ul=$("lines"); ul.innerHTML="";
+  if(r.target.item){
+    const li=document.createElement("li"); li.className="hit";
+    li.innerHTML='<span class="mark">★</span><span>'+esc(r.target.item)+'</span><span class="val">Zielteil</span>';
+    ul.appendChild(li);
+  }
   r.target.want.forEach(w=>{
     const f=r.found.find(x=>x.name===w);
     const li=document.createElement("li"); li.className=f?"hit":"miss";
@@ -744,8 +779,8 @@ function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;"
 function renderSlotPick(active){
   const host=$("slotpick");
   if(host.dataset.built!=="1"){
-    Object.keys(TARGETS).forEach(k=>{
-      const b=document.createElement("button"); b.type="button"; b.dataset.slot=k; b.textContent=TARGETS[k].de;
+    Object.keys(SLOT_DE).forEach(k=>{
+      const b=document.createElement("button"); b.type="button"; b.dataset.slot=k; b.textContent=SLOT_DE[k];
       b.addEventListener("click", ()=>{
         slotOverride = slotOverride===k ? null : k;
         if(lastLines){ const res=evaluate(lastLines); if(frozen) drawOverlay(res); }
@@ -757,12 +792,30 @@ function renderSlotPick(active){
   [...host.children].forEach(b=>b.setAttribute("aria-pressed", b.dataset.slot===active?"true":"false"));
 }
 
+function renderBuildPick(){
+  const host=$("builds");
+  if(host.dataset.built!=="1"){
+    BUILDS.forEach(b=>{
+      const el=document.createElement("button"); el.type="button"; el.dataset.build=b.id; el.textContent=b.name;
+      el.addEventListener("click", ()=>{
+        activeBuild=b.id;
+        try{ localStorage.setItem("d4scan-build", b.id); }catch(e){}
+        renderBuildPick();
+        if(lastLines){ const res=evaluate(lastLines); if(frozen) drawOverlay(res); }
+      });
+      host.appendChild(el);
+    });
+    host.dataset.built="1";
+  }
+  [...host.children].forEach(el=>el.setAttribute("aria-pressed", el.dataset.build===activeBuild?"true":"false"));
+}
+
 /* ===================== Overlay auf dem Standbild ===================== */
 function drawOverlay(result){
   if(!result || !shot.width || !frozenFrame.width) return;
   shotCtx.drawImage(frozenFrame,0,0);
   const m=cropOrigin.mult;
-  const colors={ hit:"rgba(111,154,95,.95)", reroll:"rgba(201,151,63,.95)", extra:"rgba(113,102,92,.8)", none:null };
+  const colors={ hit:"rgba(111,154,95,.95)", reroll:"rgba(201,151,63,.95)", keeper:"rgba(200,81,43,.95)", extra:"rgba(113,102,92,.8)", none:null };
   shotCtx.lineWidth=Math.max(2, Math.round(shot.width/500));
   shotCtx.font=Math.max(13, Math.round(shot.width/70))+"px system-ui, sans-serif";
   result.annotated.forEach(a=>{
@@ -776,10 +829,8 @@ function drawOverlay(result){
     shotCtx.fillStyle=c.replace(/,\s*\.?\d+\)$/,",.16)");
     shotCtx.fillRect(x,y,w,h);
     shotCtx.strokeRect(x,y,w,h);
-    if(a.kind==="reroll"){
-      shotCtx.fillStyle=c;
-      shotCtx.fillText("umrollen", x+w+8, y+h*0.75);
-    }
+    if(a.kind==="reroll"){ shotCtx.fillStyle=c; shotCtx.fillText("umrollen", x+w+8, y+h*0.75); }
+    if(a.kind==="keeper"){ shotCtx.fillStyle=c; shotCtx.fillText("aufheben", x+w+8, y+h*0.75); }
   });
 }
 
@@ -838,6 +889,7 @@ $("scale").addEventListener("input", ()=>{ $("scale-val").textContent=$("scale")
 $("thrmode").addEventListener("change", refreshPreview);
 
 /* ===================== Start ===================== */
+renderBuildPick();
 renderSlotPick("helm");
 if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
   // Tablet/Handy: Kamera ist hier der einzige sinnvolle Weg
